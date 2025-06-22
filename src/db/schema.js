@@ -23,6 +23,7 @@ export const menuTable = pgTable("menu", { // "menu" should match your table nam
   description: text("description"), // No .notNull() if it's optional
   image_url: varchar("image_url", { length: 500 }), // No .notNull() if it's optional
   // You might want to add created_at and updated_at for tracking:
+  category: text('category'),
   created_at: timestamp("created_at").defaultNow(),
   updated_at: timestamp("updated_at").defaultNow(),
 });
