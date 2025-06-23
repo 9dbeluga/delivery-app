@@ -2,8 +2,8 @@ import express from "express";
 import { ENV } from "./config/env.js";
 import { db } from "./config/db.js";
 import { ordersTable, menuTable } from "./db/schema.js";
-// Make sure to import 'ilike' for case-insensitive search
-import { and, eq, ilike } from "drizzle-orm"; // <--- MODIFIED: Added 'ilike'
+// Make sure to import 'ilike' and 'or' for case-insensitive search and logical OR
+import { and, eq, ilike, or } from "drizzle-orm"; // Corrected import
 import job from "./config/cron.js";
 import cors from 'cors';
 
@@ -71,46 +71,47 @@ app.get("/api/menu/category/:categoryName", async (req, res) => {
     }
 });
 
-// --- NEW ENDPOINT: GET search menu items ---
+// --- CORRECTED ENDPOINT: GET search menu items ---
 // This handles requests like /api/search-menu?query=coffee&category=beverages
 app.get("/api/search-menu", async (req, res) => {
     try {
         const { query, category } = req.query; // Get query and optional category from URL parameters
 
-        if (!query) {
-            return res.status(400).json({ error: "Search query is required" });
+        // Basic validation: ensure query exists and is not empty after trimming whitespace
+        if (!query || typeof query !== 'string' || query.trim() === '') {
+            return res.status(400).json({ error: "Search query is required and cannot be empty" });
         }
 
-        // Build search conditions
-        let searchConditions = eq(menuTable.name, menuTable.name); // Start with a always true condition
-        if (query) {
-             // Search by name or description (case-insensitive using ilike)
-            searchConditions = and(
-                searchConditions,
-                or(
-                    ilike(menuTable.name, `%${query}%`),
-                    ilike(menuTable.description, `%${query}%`)
-                )
-            );
-        }
-       
+        // Initialize an array to hold all conditions
+        const conditions = [];
+
+        // Condition for searching by name or description (case-insensitive using ilike)
+        conditions.push(
+            or(
+                ilike(menuTable.name, `%${query.trim()}%`), // Trim whitespace from query
+                ilike(menuTable.description, `%${query.trim()}%`) // Trim whitespace from query
+            )
+        );
+
         // If a category is provided (and it's not 'all'), add it to conditions
         if (category && category !== 'all') {
-            searchConditions = and(searchConditions, eq(menuTable.category, category));
+            conditions.push(eq(menuTable.category, category));
         }
 
+        // Execute the query: use 'and' to combine all conditions in the array
         const searchResults = await db.select()
             .from(menuTable)
-            .where(searchConditions);
+            .where(and(...conditions)); // Spread the 'conditions' array into the 'and' function
 
         res.status(200).json(searchResults);
 
     } catch (error) {
+        // Log the full error to the console for debugging
         console.error("Error searching menu items:", error);
-        res.status(500).json({ error: "Something went wrong with the search" });
+        res.status(500).json({ error: "Something went wrong with the search on the server." });
     }
 });
-// --- END NEW MENU ENDPOINTS ---
+// --- END CORRECTED MENU ENDPOINTS ---
 
 
 app.post("/api/orders", async (req, res) => {
