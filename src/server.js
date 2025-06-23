@@ -1,33 +1,33 @@
 import express from "express";
 import { ENV } from "./config/env.js";
 import { db } from "./config/db.js";
-import { ordersTable, menuTable } from "./db/schema.js"; // <--- Import menuTable
-import { and, eq } from "drizzle-orm";
+import { ordersTable, menuTable } from "./db/schema.js";
+// Make sure to import 'ilike' for case-insensitive search
+import { and, eq, ilike } from "drizzle-orm"; // <--- MODIFIED: Added 'ilike'
 import job from "./config/cron.js";
-import cors from 'cors'; // <--- Import cors for cross-origin requests from your Expo app
+import cors from 'cors';
 
-
-const app = express()
+const app = express();
 const PORT = ENV.PORT || 5001;
 
-if (ENV.NODE_ENV === "production") job.start()
+if (ENV.NODE_ENV === "production") job.start();
 
-app.use(express.json())
-app.use(cors()); // <--- Add this line to enable CORS
+app.use(express.json());
+app.use(cors());
 
 app.get("/api/health", (req, res) => {
     res.status(200).json({success:true});
 });
 
-// --- NEW MENU ENDPOINTS ---
+// --- MENU ENDPOINTS ---
 
 // GET all menu items
 app.get("/api/menu", async (req, res) => {
     try {
-        const menuItems = await db.select().from(menuTable); // Select all from menuTable
+        const menuItems = await db.select().from(menuTable);
         res.status(200).json(menuItems);
     } catch (error) {
-        console.error("Error fetching menu items:", error);
+        console.error("Error fetching all menu items:", error);
         res.status(500).json({ error: "Something went wrong fetching menu" });
     }
 });
@@ -36,11 +36,11 @@ app.get("/api/menu", async (req, res) => {
 app.get("/api/menu/:id", async (req, res) => {
     try {
         const { id } = req.params;
-        // Use .where(eq(menuTable.item_id, id)) to filter by the item_id
+        // Ensure you're comparing against the correct column (e.g., item_id which is likely your primary key for menu items)
         const menuItem = await db.select().from(menuTable).where(eq(menuTable.item_id, id));
 
         if (menuItem.length > 0) {
-            res.status(200).json(menuItem[0]); // Return the first item found
+            res.status(200).json(menuItem[0]);
         } else {
             res.status(404).json({ error: "Menu item not found" });
         }
@@ -50,6 +50,66 @@ app.get("/api/menu/:id", async (req, res) => {
     }
 });
 
+// --- NEW ENDPOINT: GET menu items by category ---
+// This handles requests like /api/menu/category/beverages
+app.get("/api/menu/category/:categoryName", async (req, res) => {
+    try {
+        const { categoryName } = req.params;
+        const itemsByCategory = await db.select()
+            .from(menuTable)
+            .where(eq(menuTable.category, categoryName)); // Assuming 'category' is a column in your menuTable
+
+        if (itemsByCategory.length > 0) {
+            res.status(200).json(itemsByCategory);
+        } else {
+            // It's okay to return an empty array with 200 status if no items found for a category
+            res.status(200).json([]);
+        }
+    } catch (error) {
+        console.error("Error fetching menu items by category:", error);
+        res.status(500).json({ error: "Something went wrong fetching categorized menu items" });
+    }
+});
+
+// --- NEW ENDPOINT: GET search menu items ---
+// This handles requests like /api/search-menu?query=coffee&category=beverages
+app.get("/api/search-menu", async (req, res) => {
+    try {
+        const { query, category } = req.query; // Get query and optional category from URL parameters
+
+        if (!query) {
+            return res.status(400).json({ error: "Search query is required" });
+        }
+
+        // Build search conditions
+        let searchConditions = eq(menuTable.name, menuTable.name); // Start with a always true condition
+        if (query) {
+             // Search by name or description (case-insensitive using ilike)
+            searchConditions = and(
+                searchConditions,
+                or(
+                    ilike(menuTable.name, `%${query}%`),
+                    ilike(menuTable.description, `%${query}%`)
+                )
+            );
+        }
+       
+        // If a category is provided (and it's not 'all'), add it to conditions
+        if (category && category !== 'all') {
+            searchConditions = and(searchConditions, eq(menuTable.category, category));
+        }
+
+        const searchResults = await db.select()
+            .from(menuTable)
+            .where(searchConditions);
+
+        res.status(200).json(searchResults);
+
+    } catch (error) {
+        console.error("Error searching menu items:", error);
+        res.status(500).json({ error: "Something went wrong with the search" });
+    }
+});
 // --- END NEW MENU ENDPOINTS ---
 
 
@@ -70,44 +130,44 @@ app.post("/api/orders", async (req, res) => {
             price,
         }).returning();
 
-        res.status(201).json(newOrders[0])
+        res.status(201).json(newOrders[0]);
 
     } catch (error) {
-        console.log("Error processing Order", error)
-        res.status(500).json({error:"Something went wrong"})
+        console.log("Error processing Order", error);
+        res.status(500).json({error:"Something went wrong"});
     }
 });
 
-app.get("/api/orders/:userId", async(req, res) => { // Fix leading slash
+app.get("/api/orders/:userId", async(req, res) => {
     try {
         const {userId} = req.params;
 
-        const userOrders = await db.select().from(ordersTable).where(eq(ordersTable.userId,userId))
+        const userOrders = await db.select().from(ordersTable).where(eq(ordersTable.userId,userId));
 
-        res.status(200).json(userOrders)
-        
+        res.status(200).json(userOrders);
+
     } catch (error) {
-        console.log("Error fetching Order", error)
-        res.status(500).json({error:"Something went wrong"})
+        console.log("Error fetching Order", error);
+        res.status(500).json({error:"Something went wrong"});
     }
-})
+});
 
-app.delete("/api/orders/:userId/:descriptionId", async(req, res) => { // Fix leading slash
+app.delete("/api/orders/:userId/:descriptionId", async(req, res) => {
     try {
-        const { userId, descriptionId } = req.params
+        const { userId, descriptionId } = req.params;
 
         await db.delete(ordersTable).where(
             and(eq(ordersTable.userId, userId), eq(ordersTable.descriptionId, parseInt(descriptionId)))
         );
 
         res.status(200).json({ message: "Order Canceled Successfully" });
-        
-    } catch (error) {
-        console.log("Error canceling Order", error)
-        res.status(500).json({error:"Something went wrong"})
-    }
-})
 
-app.listen(PORT, () => { // Use the PORT constant here
-    console.log("Server is runnning on PORT:", PORT);
+    } catch (error) {
+        console.log("Error canceling Order", error);
+        res.status(500).json({error:"Something went wrong"});
+    }
+});
+
+app.listen(PORT, () => {
+    console.log("Server is running on PORT:", PORT);
 });
