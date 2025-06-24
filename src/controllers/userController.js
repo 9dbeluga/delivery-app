@@ -1,10 +1,9 @@
-// backend/src/controllers/userController.js (UPDATED)
+// backend/src/controllers/userController.js (UPDATED with getAddress)
 import { db } from '../config/db.js'; 
 import { users } from '../db/schema.js'; 
 import { eq } from 'drizzle-orm'; 
-import { Clerk } from '@clerk/clerk-sdk-node'; // <<< NEW IMPORT
+import { Clerk } from '@clerk/clerk-sdk-node';
 
-// Initialize Clerk with your secret key from environment variables
 const clerk = Clerk({
   secretKey: process.env.CLERK_SECRET_KEY,
 });
@@ -49,26 +48,23 @@ const userController = {
       try {
         const clerkUsers = await clerk.users.getUserList({
           emailAddress: [email],
-          limit: 1 // We only expect one user with this email
+          limit: 1 
         });
 
         if (clerkUsers.length > 0) {
           const clerkUser = clerkUsers[0];
           await clerk.users.updateUser(clerkUser.id, {
             publicMetadata: {
-              ...clerkUser.publicMetadata, // Spread existing metadata
-              hasAddress: true,           // Add/update hasAddress flag
+              ...clerkUser.publicMetadata, 
+              hasAddress: true,           
             },
           });
           console.log(`Clerk user ${clerkUser.id} publicMetadata updated: hasAddress=true`);
         } else {
           console.warn(`Clerk user with email ${email} not found. Cannot update publicMetadata.`);
-          // You might choose to still return success if DB save was the primary goal
         }
       } catch (clerkError) {
         console.error('Error updating Clerk user publicMetadata:', clerkError);
-        // Do not throw this error, as the address was already saved to your DB.
-        // Just log it and send success response for the address save.
       }
 
       res.status(200).json({ message: 'Address saved successfully!', address: result[0] });
@@ -76,6 +72,31 @@ const userController = {
     } catch (error) {
       console.error('Error saving address to database:', error);
       res.status(500).json({ error: 'Failed to save address due to a server error.' });
+    }
+  },
+
+  // --- NEW: Function to get a user's address ---
+  getAddress: async (req, res) => {
+    const { email } = req.query; // Using req.query for GET request parameters
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email parameter is required to fetch address.' });
+    }
+
+    try {
+      const userAddress = await db.select()
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1); // Expecting at most one address per email
+
+      if (userAddress.length > 0) {
+        res.status(200).json(userAddress[0]); // Send the first (and only) result
+      } else {
+        res.status(404).json({ message: 'Address not found for this user.' });
+      }
+    } catch (error) {
+      console.error('Error fetching address from database:', error);
+      res.status(500).json({ error: 'Failed to fetch address due to a server error.' });
     }
   },
 };
