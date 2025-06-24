@@ -1,6 +1,7 @@
-// backend/src/controllers/userController.js (New File)
-import { db } from '../db'; // Import your Drizzle DB client instance from backend/src/db.js
-import { users } from '../db/schema'; // Import the 'users' schema from backend/src/db/schema.js
+// backend/src/controllers/userController.js
+import { db } from '../db.js'; // <<< ADD .js here (assuming db.js is directly in src/)
+import { users } from '../db/schema.js'; // <<< ADD .js here
+
 import { eq } from 'drizzle-orm'; 
 
 const userController = {
