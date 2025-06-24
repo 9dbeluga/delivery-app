@@ -1,14 +1,17 @@
+// backend/src/server.js (UPDATED FILE)
 import express from "express";
 import { ENV } from "./config/env.js";
 import { db } from "./config/db.js";
-import { ordersTable, menuTable } from "./db/schema.js";
-// Make sure to import 'ilike' and 'or' for case-insensitive search and logical OR
-import { and, eq, ilike, or } from "drizzle-orm"; // Corrected import
+import { ordersTable, menuTable, users } from "./db/schema.js"; // <--- ADD 'users' import here
+import { and, eq, ilike, or } from "drizzle-orm";
 import job from "./config/cron.js";
 import cors from 'cors';
 
+// Import your new user routes
+import userRoutes from './routes/userRoutes.js'; // <--- ADD this import
+
 const app = express();
-const PORT = ENV.PORT || 5001;
+const PORT = ENV.PORT || 5001; // Your current port is 5001
 
 if (ENV.NODE_ENV === "production") job.start();
 
@@ -19,8 +22,12 @@ app.get("/api/health", (req, res) => {
     res.status(200).json({success:true});
 });
 
-// --- MENU ENDPOINTS ---
+// --- Use your new user routes ---
+// All requests to /api/user/... will be handled by userRoutes
+app.use('/api/user', userRoutes); // <--- ADD this middleware
 
+// --- MENU ENDPOINTS ---
+// (Your existing menu endpoints remain unchanged)
 // GET all menu items
 app.get("/api/menu", async (req, res) => {
     try {
@@ -36,7 +43,6 @@ app.get("/api/menu", async (req, res) => {
 app.get("/api/menu/:id", async (req, res) => {
     try {
         const { id } = req.params;
-        // Ensure you're comparing against the correct column (e.g., item_id which is likely your primary key for menu items)
         const menuItem = await db.select().from(menuTable).where(eq(menuTable.item_id, id));
 
         if (menuItem.length > 0) {
@@ -50,19 +56,17 @@ app.get("/api/menu/:id", async (req, res) => {
     }
 });
 
-// --- NEW ENDPOINT: GET menu items by category ---
-// This handles requests like /api/menu/category/beverages
+// GET menu items by category
 app.get("/api/menu/category/:categoryName", async (req, res) => {
     try {
         const { categoryName } = req.params;
         const itemsByCategory = await db.select()
             .from(menuTable)
-            .where(eq(menuTable.category, categoryName)); // Assuming 'category' is a column in your menuTable
+            .where(eq(menuTable.category, categoryName));
 
         if (itemsByCategory.length > 0) {
             res.status(200).json(itemsByCategory);
         } else {
-            // It's okay to return an empty array with 200 status if no items found for a category
             res.status(200).json([]);
         }
     } catch (error) {
@@ -71,47 +75,39 @@ app.get("/api/menu/category/:categoryName", async (req, res) => {
     }
 });
 
-// --- CORRECTED ENDPOINT: GET search menu items ---
-// This handles requests like /api/search-menu?query=coffee&category=beverages
+// GET search menu items
 app.get("/api/search-menu", async (req, res) => {
     try {
-        const { query, category } = req.query; // Get query and optional category from URL parameters
+        const { query, category } = req.query;
 
-        // Basic validation: ensure query exists and is not empty after trimming whitespace
         if (!query || typeof query !== 'string' || query.trim() === '') {
             return res.status(400).json({ error: "Search query is required and cannot be empty" });
         }
 
-        // Initialize an array to hold all conditions
         const conditions = [];
-
-        // Condition for searching by name or description (case-insensitive using ilike)
         conditions.push(
             or(
-                ilike(menuTable.name, `%${query.trim()}%`), // Trim whitespace from query
-                ilike(menuTable.description, `%${query.trim()}%`) // Trim whitespace from query
+                ilike(menuTable.name, `%${query.trim()}%`),
+                ilike(menuTable.description, `%${query.trim()}%`)
             )
         );
 
-        // If a category is provided (and it's not 'all'), add it to conditions
         if (category && category !== 'all') {
             conditions.push(eq(menuTable.category, category));
         }
 
-        // Execute the query: use 'and' to combine all conditions in the array
         const searchResults = await db.select()
             .from(menuTable)
-            .where(and(...conditions)); // Spread the 'conditions' array into the 'and' function
+            .where(and(...conditions));
 
         res.status(200).json(searchResults);
 
     } catch (error) {
-        // Log the full error to the console for debugging
         console.error("Error searching menu items:", error);
         res.status(500).json({ error: "Something went wrong with the search on the server." });
     }
 });
-// --- END CORRECTED MENU ENDPOINTS ---
+// --- END MENU ENDPOINTS ---
 
 
 app.post("/api/orders", async (req, res) => {
