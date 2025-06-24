@@ -7,7 +7,7 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "db:generate": "drizzle-kit generate:pg", 
-    "db:push": "drizzle-kit push:pg"
+    "db:push": "drizzle-kit push"
   },
   "keywords": [],
   "type": "module",

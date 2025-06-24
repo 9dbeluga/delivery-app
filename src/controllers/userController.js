@@ -1,7 +1,8 @@
 // backend/src/controllers/userController.js
-import { db } from '../db.js'; // <<< ADD .js here (assuming db.js is directly in src/)
-import { users } from '../db/schema.js'; // <<< ADD .js here
+// Assuming db.js is in backend/src/config/db.js, relative to backend/src/controllers/
+import { db } from '../config/db.js'; // <<< CHANGE THIS LINE
 
+import { users } from '../db/schema.js'; 
 import { eq } from 'drizzle-orm'; 
 
 const userController = {
