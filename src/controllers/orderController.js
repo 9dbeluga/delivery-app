@@ -1,4 +1,4 @@
-// backend/src/controllers/orderController.js (UPDATED for Single Table)
+// backend/src/controllers/orderController.js (CONFIRMED LATEST VERSION)
 import { db } from '../config/db.js';
 import { orders, users } from '../db/schema.js'; // Only import orders and users
 import { eq, and, desc } from 'drizzle-orm';
@@ -39,6 +39,7 @@ const orderController = {
           deliveryAddressExtraInfo: address.extraInfo,
           deliveryAddressProvince: address.province,
           deliveryAddressCountry: address.country,
+          updatedAt: new Date(), // Set updatedAt for new orders
         })
         .returning(); 
 
@@ -77,7 +78,7 @@ const orderController = {
     }
   },
 
-  // Optional: Get a single order by ID
+  // Get a single order by ID
   getOrderDetail: async (req, res) => {
     const { orderId } = req.params; 
 
@@ -95,7 +96,6 @@ const orderController = {
         return res.status(404).json({ message: 'Order not found.' });
       }
 
-      // No need to fetch items separately, they are embedded
       res.status(200).json(orderDetail[0]);
 
     } catch (error) {
@@ -104,10 +104,10 @@ const orderController = {
     }
   },
 
-  // Optional: Update order status (e.g., mark as delivered)
+  // Update order status (e.g., mark as delivered)
   updateOrderProgress: async (req, res) => {
     const { orderId } = req.params;
-    const { inProgress } = req.body; // Expect boolean true/false
+    const { inProgress } = req.body; 
 
     if (!orderId || typeof inProgress !== 'boolean') {
       return res.status(400).json({ error: 'Order ID and a boolean inProgress status are required.' });
@@ -115,7 +115,7 @@ const orderController = {
 
     try {
       const updatedOrder = await db.update(orders)
-        .set({ inProgress: inProgress, updatedAt: new Date() }) // Add updatedAt if you have it in schema
+        .set({ inProgress: inProgress, updatedAt: new Date() }) 
         .where(eq(orders.id, orderId))
         .returning();
 
