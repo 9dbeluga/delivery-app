@@ -1,12 +1,10 @@
-// backend/src/controllers/userController.js (UPDATED with getAddress)
-import { db } from '../config/db.js'; 
-import { users } from '../db/schema.js'; 
+// backend/src/controllers/userController.js (UPDATED - Clerk metadata calls removed)
+import { db } from '../config/db.js'; // Correct path to your Drizzle DB client
+import { users } from '../db/schema.js'; // Correct path to your Drizzle schema
 import { eq } from 'drizzle-orm'; 
-import { Clerk } from '@clerk/clerk-sdk-node';
 
-const clerk = Clerk({
-  secretKey: process.env.CLERK_SECRET_KEY,
-});
+// --- REMOVED: import { Clerk } from '@clerk/clerk-sdk-node'; ---
+// --- REMOVED: const clerk = Clerk({...}); ---
 
 const userController = {
   saveAddress: async (req, res) => {
@@ -17,7 +15,7 @@ const userController = {
     }
 
     try {
-      // 1. Save/update address in your database
+      // Save/update address in your Neon database (this part remains, it's correct)
       const result = await db.insert(users)
         .values({
           email: email,
@@ -44,28 +42,8 @@ const userController = {
 
       console.log('Address saved/updated in DB:', result[0]);
 
-      // 2. Find the user in Clerk using their email and update publicMetadata
-      try {
-        const clerkUsers = await clerk.users.getUserList({
-          emailAddress: [email],
-          limit: 1 
-        });
-
-        if (clerkUsers.length > 0) {
-          const clerkUser = clerkUsers[0];
-          await clerk.users.updateUser(clerkUser.id, {
-            publicMetadata: {
-              ...clerkUser.publicMetadata, 
-              hasAddress: true,           
-            },
-          });
-          console.log(`Clerk user ${clerkUser.id} publicMetadata updated: hasAddress=true`);
-        } else {
-          console.warn(`Clerk user with email ${email} not found. Cannot update publicMetadata.`);
-        }
-      } catch (clerkError) {
-        console.error('Error updating Clerk user publicMetadata:', clerkError);
-      }
+      // --- REMOVED: All Clerk metadata update logic from here ---
+      // This logic no longer belongs here as per your requirement.
 
       res.status(200).json({ message: 'Address saved successfully!', address: result[0] });
 
@@ -75,23 +53,24 @@ const userController = {
     }
   },
 
-  // --- NEW: Function to get a user's address ---
   getAddress: async (req, res) => {
-    const { email } = req.query; // Using req.query for GET request parameters
+    const { email } = req.query; 
 
     if (!email) {
       return res.status(400).json({ error: 'Email parameter is required to fetch address.' });
     }
 
     try {
+      // Fetch address from your Neon database (this part remains, it's correct)
       const userAddress = await db.select()
         .from(users)
         .where(eq(users.email, email))
-        .limit(1); // Expecting at most one address per email
+        .limit(1); 
 
       if (userAddress.length > 0) {
-        res.status(200).json(userAddress[0]); // Send the first (and only) result
+        res.status(200).json(userAddress[0]); 
       } else {
+        // Return 404 if no address is found, this is important for frontend check
         res.status(404).json({ message: 'Address not found for this user.' });
       }
     } catch (error) {
