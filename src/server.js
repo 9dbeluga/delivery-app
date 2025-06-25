@@ -1,39 +1,30 @@
-// backend/src/server.js (UPDATED - MODULARIZED MAIN APP FILE)
+// backend/src/server.js (UPDATED - Adjust Order Routes Middleware)
 import express from "express";
-import { ENV } from "./config/env.js"; // Assuming ENV is correctly defined
-import { db } from "./config/db.js"; // Import db if needed elsewhere, though not directly for routes now
-// Removed direct imports for schema tables as they are used within controllers
-// import { orders, menuTable, users } from "./db/schema.js"; 
-import { and, eq, ilike, or } from "drizzle-orm"; // Still needed for middleware/direct queries if any, or can be moved to controllers
-import job from "./config/cron.js"; // Keep your cron job setup
+import { ENV } from "./config/env.js"; 
+import { db } from "./config/db.js"; 
+import { and, eq, ilike, or } from "drizzle-orm"; 
+import job from "./config/cron.js"; 
 import cors from 'cors';
 
-// Import your modular route files
 import userRoutes from './routes/userRoutes.js'; 
-import orderRoutes from './routes/orderRoutes.js'; // Ensure this is imported
-import menuRoutes from './routes/menuRoutes.js'; // <<< NEW IMPORT: Menu routes
+import orderRoutes from './routes/orderRoutes.js'; 
+import menuRoutes from './routes/menuRoutes.js'; 
 
 const app = express();
 const PORT = ENV.PORT || 5001; 
 
-if (ENV.NODE_ENV === "production") job.start(); // Start cron job in production
+if (ENV.NODE_ENV === "production") job.start(); 
 
-app.use(express.json()); // Middleware for parsing JSON bodies
-app.use(cors()); // Middleware for CORS
+app.use(express.json()); 
+app.use(cors()); 
 
-// Basic health check route
 app.get("/api/health", (req, res) => {
   res.status(200).json({ success: true });
 });
 
-// --- MODULARIZED ROUTES ---
-// Mount your API routes using the imported routers
-app.use('/api/user', userRoutes); // User registration/address
-app.use('/api/orders', orderRoutes); // Order placement and fetching
-app.use('/api/menu', menuRoutes);   // Menu item fetching and searching
-
-// --- REMOVED: All previous direct menu endpoints ---
-// --- REMOVED: All previous direct orders endpoints (POST, GET, DELETE) ---
+app.use('/api/user', userRoutes); 
+app.use('/api/orders', orderRoutes); // This now handles /api/orders/user, /api/orders/status, etc.
+app.use('/api/menu', menuRoutes);   
 
 // General error handling middleware
 app.use((err, req, res, next) => {

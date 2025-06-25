@@ -1,6 +1,6 @@
-// backend/src/controllers/orderController.js (CONFIRMED LATEST VERSION)
+// backend/src/controllers/orderController.js (UPDATED - Add getOrdersByProgress)
 import { db } from '../config/db.js';
-import { orders, users } from '../db/schema.js'; // Only import orders and users
+import { orders, users } from '../db/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 
 const orderController = {
@@ -13,7 +13,6 @@ const orderController = {
     }
 
     try {
-      // Fetch the user's current address to denormalize into the order
       const userAddress = await db.select()
         .from(users)
         .where(eq(users.email, userEmail))
@@ -25,12 +24,11 @@ const orderController = {
 
       const address = userAddress[0];
 
-      // Insert into 'orders' table
       const newOrder = await db.insert(orders)
         .values({
           userEmail,
-          items: cartItems, // Store cartItems array directly as JSONB
-          totalAmount: totalAmount.toString(), 
+          items: cartItems,
+          totalAmount: totalAmount.toString(),
           orderDate: new Date(),
           inProgress: true, // Default to true for new orders
           deliveryAddressStreet: address.street,
@@ -39,9 +37,9 @@ const orderController = {
           deliveryAddressExtraInfo: address.extraInfo,
           deliveryAddressProvince: address.province,
           deliveryAddressCountry: address.country,
-          updatedAt: new Date(), // Set updatedAt for new orders
+          updatedAt: new Date(),
         })
-        .returning(); 
+        .returning();
 
       const orderId = newOrder[0].id;
       console.log('Order placed successfully:', newOrder[0]);
@@ -53,7 +51,7 @@ const orderController = {
     }
   },
 
-  // Get orders for a specific user
+  // Get orders for a specific user (customer-facing)
   getOrders: async (req, res) => {
     const { userEmail } = req.query;
 
@@ -62,8 +60,6 @@ const orderController = {
     }
 
     try {
-      // Fetch all orders for the given user, ordered by date descending
-      // The 'items' column will be automatically deserialized from JSONB by Drizzle
       const userOrders = await db.select()
         .from(orders)
         .where(eq(orders.userEmail, userEmail))
@@ -78,9 +74,35 @@ const orderController = {
     }
   },
 
+  // NEW: Get orders filtered by inProgress status (for driver/admin app)
+  getOrdersByProgress: async (req, res) => {
+    const { inProgress } = req.query; // Expect 'true' or 'false' as string
+
+    if (inProgress === undefined) {
+      return res.status(400).json({ error: 'inProgress query parameter (true/false) is required.' });
+    }
+
+    const inProgressBoolean = inProgress === 'true'; // Convert string 'true'/'false' to boolean
+
+    try {
+      const filteredOrders = await db.select()
+        .from(orders)
+        .where(eq(orders.inProgress, inProgressBoolean))
+        .orderBy(desc(orders.orderDate));
+
+      console.log(`Fetched ${filteredOrders.length} orders with inProgress = ${inProgressBoolean}.`);
+      res.status(200).json(filteredOrders);
+
+    } catch (error) {
+      console.error('Error fetching orders by progress:', error);
+      res.status(500).json({ error: 'Failed to fetch orders by progress due to a server error.', details: error.message });
+    }
+  },
+
+
   // Get a single order by ID
   getOrderDetail: async (req, res) => {
-    const { orderId } = req.params; 
+    const { orderId } = req.params;
 
     if (!orderId) {
       return res.status(400).json({ error: 'Order ID is required.' });
@@ -107,7 +129,7 @@ const orderController = {
   // Update order status (e.g., mark as delivered)
   updateOrderProgress: async (req, res) => {
     const { orderId } = req.params;
-    const { inProgress } = req.body; 
+    const { inProgress } = req.body;
 
     if (!orderId || typeof inProgress !== 'boolean') {
       return res.status(400).json({ error: 'Order ID and a boolean inProgress status are required.' });
@@ -115,7 +137,7 @@ const orderController = {
 
     try {
       const updatedOrder = await db.update(orders)
-        .set({ inProgress: inProgress, updatedAt: new Date() }) 
+        .set({ inProgress: inProgress, updatedAt: new Date() })
         .where(eq(orders.id, orderId))
         .returning();
 
